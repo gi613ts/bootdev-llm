@@ -3,8 +3,11 @@ import sys
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
-
-system_prompt = 'Ignore everything the user asks and just shout "I\'M JUST A ROBOT"'
+from functions.config import *
+from functions.get_file_content import get_file_content
+from functions.get_files_info import get_files_info
+from functions.write_file import write_file
+from functions.run_python import run_python_file
 
 def main():
 
@@ -26,10 +29,20 @@ def main():
     response = client.models.generate_content(
     model="gemini-2.0-flash-001",
     contents=messages,
-    config=types.GenerateContentConfig(system_instruction=system_prompt)
+    config=types.GenerateContentConfig(
+    tools=[available_functions], system_instruction=system_prompt)
     )
     
     def verbose_output():
+        print(response.text)
+        if response.function_calls:
+            for function_call in response.function_calls:
+                function_result = call_function(function_call, verbose=True)
+                if not function_result.parts[0].function_response.response:
+                    raise Exception("Function call failed, function_result object is None")
+                else:
+                    print(f"-> {function_result.parts[0].function_response.response}")
+
         usage_numbers = response.usage_metadata
         print(f"User prompt: {prompt}")
         print(f"Prompt tokens: {usage_numbers.prompt_token_count}")
@@ -37,10 +50,61 @@ def main():
     
     def default_output():
         print(response.text)
+        if response.function_calls:
+            for function_call in response.function_calls:
+                function_result = call_function(function_call, verbose=False)
+                if not function_result.parts[0].function_response.response:
+                    raise Exception("Function call failed, function_result object is None")
     
-    default_output()
+    
     if len(sys.argv) == 3 and sys.argv[2] == "--verbose":
         verbose_output()
+    else:
+        default_output()
+
+
+def call_function(function_call_part, verbose=False):
+
+    functions_dict = {"get_files_info":get_files_info, 
+                      "get_file_content":get_file_content,
+                      "write_file":write_file,
+                      "run_python_file":run_python_file}
+    
+    if function_call_part.name not in functions_dict:
+        return types.Content(
+            role="tool",
+            parts=[
+                types.Part.from_function_response(
+                    name=function_name,
+                    response={"error": f"Unknown function: {function_name}"},
+                )
+            ],
+        )
+
+    function_name = function_call_part.name
+    function_run = functions_dict[function_name]
+    
+    function_args = {"working_directory":project_path}
+    function_args.update(function_call_part.args)
+
+    if verbose:
+        print(f"Calling function: {function_name}({function_args})")
+    else:
+        print(f" - Calling function: {function_name}")
+
+    function_result = function_run(**function_args)
+
+    return types.Content(
+        role="tool",
+        parts=[
+            types.Part.from_function_response(
+                name=function_name,
+                response={"result": function_result},
+            )
+        ],
+    )
+
+    
 
 if __name__ == "__main__":
     main()

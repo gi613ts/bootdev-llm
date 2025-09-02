@@ -7,9 +7,7 @@ def get_file_content(working_directory, file_path):
     requested_full_path = os.path.join(directory_abs, file_path)
     clean_path = os.path.abspath(requested_full_path)
 
-    if clean_path.startswith(project_path):
-        pass
-    else:
+    if not clean_path.startswith(project_path):
         return f'Error: Cannot read "{file_path}" as it is outside the permitted working directory'
 
 

@@ -8,7 +8,13 @@ def get_files_info(working_directory, directory="."):
     requested_full_path = os.path.join(directory_abs, directory)
     clean_path = os.path.abspath(requested_full_path)
 
-    if clean_path.startswith(project_path):
+    if not clean_path.startswith(project_path):
+        return f'Error: Cannot list "{directory}" as it is outside the permitted working directory'
+
+    if not os.path.isdir(clean_path):
+        return f'Error: "{directory}" is not a directory'
+
+    try:
         report = ""
         contents = os.listdir(clean_path)
         for item in contents:
@@ -18,8 +24,7 @@ def get_files_info(working_directory, directory="."):
                 print("Error: {error}")
 
         return report
-    else:
-        return f'Error: Cannot list "{directory}" as it is outside the permitted working directory'
     
-    if os.path.isdir(clean_path) == False:
-        return f'Error: "{directory}" is not a directory'
+    except Exception as e:
+        return "Error getting file info: {e}"
+    
