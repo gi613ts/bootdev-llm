@@ -28,8 +28,27 @@ def main():
 
     messages = [types.Content(role="user", parts=[types.Part(text=prompt)])]
 
-    generate_content(client, messages, verbose)
+    
+    
 
+    loops = 0
+    while True:
+        loops += 1
+        if loops > 20:
+            print("Number of calls exceeded a maximum of 20")
+            sys.exit(1)
+
+        final_text_response = generate_content(client, messages, verbose)
+
+        try:
+            if final_text_response:
+                print(final_text_response)
+                break
+
+        except Exception as e:
+            print(f"Something went wrong on loop {loops}: {e}")
+
+        
 
 
 
@@ -42,14 +61,22 @@ def generate_content(client, messages, verbose):
         tools=[available_functions], system_instruction=system_prompt
         )
     )
-    
+
     if verbose:
         usage_numbers = response.usage_metadata
         print(f"Prompt tokens: {usage_numbers.prompt_token_count}")
         print(f"Response tokens: {usage_numbers.candidates_token_count}")
 
+    #print("messages", messages)
+    #print("response: ", response)
+
     if not response.function_calls:
         return response.text
+
+    if response.candidates:
+        for dummy_response in response.candidates:
+            messages.append(dummy_response.content)
+
 
     function_results = []
     for function_call in response.function_calls:
@@ -62,29 +89,13 @@ def generate_content(client, messages, verbose):
         if verbose:
             print(f"-> {function_result.parts[0].function_response.response}")
         function_results.append(function_result.parts[0])
-        print(function_results)
     
     if function_results == []:
         raise Exception("Function result list is empty")
+    
+    converted = types.Content(role="user", parts=function_results)
 
-
-    """
-    for response in response.candidates:
-        messages.append(response)
-
-    #print("response candidates: ", response.candidates)
-    #print("response candidate item: ", response.candidates[0])
-    #print("response candidate item content: ", response.candidates[0].content)
-
-    print("call output: ", call_output)
-    print("messages: ", messages)
-
-    """
-
-
-
-
-
+    messages.append(converted)
 
 
 def call_function(function_call_part, verbose=False):
